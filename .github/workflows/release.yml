@@ -1,0 +1,92 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download All Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts/
+
+    - name: Create Release Archives
+      run: |
+        # Create per-platform archives
+        cd artifacts
+
+        # Windows
+        if [ -d "openjtalk-native-windows-x64" ]; then
+          cd openjtalk-native-windows-x64
+          zip -r ../openjtalk-native-windows-x64.zip .
+          cd ..
+        fi
+
+        # Linux
+        if [ -d "openjtalk-native-linux-x86_64" ]; then
+          cd openjtalk-native-linux-x86_64
+          tar czf ../openjtalk-native-linux-x86_64.tar.gz .
+          cd ..
+        fi
+
+        # macOS
+        if [ -d "openjtalk-native-macos" ]; then
+          cd openjtalk-native-macos
+          tar czf ../openjtalk-native-macos.tar.gz .
+          cd ..
+        fi
+
+        # iOS
+        if [ -d "openjtalk-native-ios-arm64" ]; then
+          cd openjtalk-native-ios-arm64
+          tar czf ../openjtalk-native-ios-arm64.tar.gz .
+          cd ..
+        fi
+
+        # Android (combine all ABIs)
+        mkdir -p android-combined
+        for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+          if [ -d "openjtalk-native-android-${abi}" ]; then
+            cp -r "openjtalk-native-android-${abi}/android" android-combined/ 2>/dev/null || true
+          fi
+        done
+        if [ -d "android-combined/android" ]; then
+          cd android-combined
+          tar czf ../openjtalk-native-android.tar.gz .
+          cd ..
+        fi
+
+        # All-in-one archive
+        mkdir -p all-platforms
+        for dir in openjtalk-native-*; do
+          [ -d "$dir" ] && cp -r "$dir"/* all-platforms/ 2>/dev/null || true
+        done
+        cd all-platforms
+        zip -r ../openjtalk-native-all.zip .
+        cd ..
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          artifacts/openjtalk-native-windows-x64.zip
+          artifacts/openjtalk-native-linux-x86_64.tar.gz
+          artifacts/openjtalk-native-macos.tar.gz
+          artifacts/openjtalk-native-android.tar.gz
+          artifacts/openjtalk-native-ios-arm64.tar.gz
+          artifacts/openjtalk-native-all.zip
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,256 @@
+name: Build openjtalk_native
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    name: Build Linux x86_64
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: sudo apt-get update && sudo apt-get install -y build-essential cmake autoconf automake libtool
+
+    - name: Fetch Sources
+      run: |
+        chmod +x scripts/*.sh
+        ./scripts/fetch_dependencies.sh
+
+    - name: Build Dependencies
+      run: ./scripts/build_dependencies_ci.sh
+
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+
+    - name: Build
+      run: cmake --build build -j$(nproc)
+
+    - name: Run Tests
+      run: cd build && ctest --output-on-failure
+
+    - name: Verify Exports
+      run: nm -D build/lib/libopenjtalk_native.so | grep openjtalk_native_ | head -20
+
+    - name: Prepare Artifacts
+      run: |
+        mkdir -p artifacts/linux/x86_64
+        cp build/lib/libopenjtalk_native.so artifacts/linux/x86_64/
+        cp include/openjtalk_native.h artifacts/
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: openjtalk-native-linux-x86_64
+        path: artifacts/
+
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install CMake
+      run: brew install cmake autoconf automake libtool
+
+    - name: Fetch Sources
+      run: |
+        chmod +x scripts/*.sh
+        ./scripts/fetch_dependencies.sh
+
+    - name: Build Dependencies
+      run: ./scripts/build_dependencies_ci.sh
+
+    - name: Build
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+        cmake --build build -j$(sysctl -n hw.ncpu)
+
+    - name: Run Tests
+      run: cd build && ctest --output-on-failure
+
+    - name: Prepare Artifacts
+      run: |
+        mkdir -p artifacts/macos
+        cp build/lib/libopenjtalk_native.dylib artifacts/macos/
+        cp include/openjtalk_native.h artifacts/
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: openjtalk-native-macos
+        path: artifacts/
+
+  build-windows-cross:
+    name: Build Windows (Cross-compile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build Docker Image
+      run: docker build -f docker/Dockerfile.windows-cross -t openjtalk-windows-cross .
+
+    - name: Build in Docker
+      run: |
+        docker run --rm -v "${PWD}:/workspace" -w /workspace openjtalk-windows-cross bash -c "
+          chmod +x scripts/*.sh
+          dos2unix scripts/*.sh
+          ./scripts/fetch_dependencies.sh
+          ./scripts/build_dependencies_cross.sh
+          cmake -B build \
+            -DCMAKE_TOOLCHAIN_FILE=/dev/null \
+            -DCMAKE_SYSTEM_NAME=Windows \
+            -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
+            -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTS=OFF
+          cmake --build build -j\$(nproc)
+        "
+
+    - name: Verify DLL
+      run: |
+        sudo apt-get install -y binutils-mingw-w64-x86-64
+        x86_64-w64-mingw32-objdump -p build/bin/openjtalk_native.dll | grep -E "DLL Name:|EXPORT" | head -20
+        ls -la build/bin/openjtalk_native.dll
+
+    - name: Prepare Artifacts
+      run: |
+        mkdir -p artifacts/windows/x64
+        cp build/bin/openjtalk_native.dll artifacts/windows/x64/
+        cp include/openjtalk_native.h artifacts/
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: openjtalk-native-windows-x64
+        path: artifacts/
+
+  build-android:
+    name: Build Android (${{ matrix.abi }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a, x86, x86_64]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build
+      run: |
+        docker build -f docker/Dockerfile.android -t openjtalk-android .
+        docker run --rm -v "${PWD}:/workspace" -w /workspace openjtalk-android bash -c "
+          chmod +x scripts/*.sh
+          dos2unix scripts/*.sh
+          export ABIS=('${{ matrix.abi }}')
+          ./scripts/fetch_dependencies.sh
+          ./scripts/build_dependencies_android.sh
+          cmake -B build \
+            -DCMAKE_TOOLCHAIN_FILE=\$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=${{ matrix.abi }} \
+            -DANDROID_PLATFORM=android-21 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTS=OFF
+          cmake --build build -j\$(nproc)
+        "
+
+    - name: Prepare Artifacts
+      run: |
+        mkdir -p artifacts/android/${{ matrix.abi }}
+        cp build/lib/libopenjtalk_native.so artifacts/android/${{ matrix.abi }}/
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: openjtalk-native-android-${{ matrix.abi }}
+        path: artifacts/
+
+  build-ios:
+    name: Build iOS
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install CMake
+      run: brew install cmake autoconf automake libtool
+
+    - name: Fetch and Build Dependencies
+      run: |
+        chmod +x scripts/*.sh
+        ./scripts/fetch_dependencies.sh
+        ./scripts/build_dependencies_ios.sh
+
+    - name: Build iOS Static Library
+      run: |
+        cmake -B build_ios \
+          -DCMAKE_SYSTEM_NAME=iOS \
+          -DCMAKE_OSX_ARCHITECTURES=arm64 \
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DBUILD_TESTS=OFF \
+          -DIOS=ON
+        cmake --build build_ios
+
+    - name: Verify
+      run: |
+        lipo -info build_ios/lib/libopenjtalk_native.a
+        nm build_ios/lib/libopenjtalk_native.a | grep openjtalk_native_ | head -10
+
+    - name: Prepare Artifacts
+      run: |
+        mkdir -p artifacts/iOS
+        cp build_ios/lib/libopenjtalk_native.a artifacts/iOS/
+        cp include/openjtalk_native.h artifacts/
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: openjtalk-native-ios-arm64
+        path: artifacts/
+
+  validate-builds:
+    name: Validate All Builds
+    needs: [build-linux, build-macos, build-windows-cross, build-android, build-ios]
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        path: libraries
+
+    - name: Validate
+      run: |
+        echo "=== Validating Cross-Platform Libraries ==="
+
+        [ -f "libraries/openjtalk-native-linux-x86_64/linux/x86_64/libopenjtalk_native.so" ] && echo "OK: Linux x86_64" || echo "MISSING: Linux x86_64"
+        [ -f "libraries/openjtalk-native-macos/macos/libopenjtalk_native.dylib" ] && echo "OK: macOS" || echo "MISSING: macOS"
+        [ -f "libraries/openjtalk-native-windows-x64/windows/x64/openjtalk_native.dll" ] && echo "OK: Windows x64" || echo "MISSING: Windows x64"
+        [ -f "libraries/openjtalk-native-ios-arm64/iOS/libopenjtalk_native.a" ] && echo "OK: iOS ARM64" || echo "MISSING: iOS ARM64"
+
+        for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+          [ -f "libraries/openjtalk-native-android-${abi}/android/${abi}/libopenjtalk_native.so" ] && echo "OK: Android ${abi}" || echo "MISSING: Android ${abi}"
+        done
+
+    - name: Build Report
+      if: always()
+      run: |
+        echo "# openjtalk_native Build Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Windows x64 | ${{ needs.build-windows-cross.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Linux x86_64 | ${{ needs.build-linux.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| macOS | ${{ needs.build-macos.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Android | ${{ needs.build-android.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| iOS | ${{ needs.build-ios.result }} |" >> $GITHUB_STEP_SUMMARY
