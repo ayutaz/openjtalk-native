@@ -58,8 +58,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install CMake
-      run: brew install cmake autoconf automake libtool
+    - name: Install Dependencies
+      run: |
+        brew list cmake &>/dev/null || brew install cmake
+        brew list autoconf &>/dev/null || brew install autoconf
+        brew list automake &>/dev/null || brew install automake
+        brew list libtool &>/dev/null || brew install libtool
 
     - name: Fetch Sources
       run: |
@@ -183,8 +187,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install CMake
-      run: brew install cmake autoconf automake libtool
+    - name: Install Dependencies
+      run: |
+        brew list cmake &>/dev/null || brew install cmake
+        brew list autoconf &>/dev/null || brew install autoconf
+        brew list automake &>/dev/null || brew install automake
+        brew list libtool &>/dev/null || brew install libtool
 
     - name: Fetch and Build Dependencies
       run: |
