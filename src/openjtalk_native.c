@@ -193,7 +193,7 @@ static OpenJTalkNativePhonemeResult* labels_to_phonemes(OpenJTalkNativeContext* 
             if (phoneme_len >= 3 && strncmp(phoneme_start, "sil", 3) == 0) {
                 if (i == 0 || i == label_size - 1) {
                     if (buf_ptr != phoneme_buffer) *buf_ptr++ = ' ';
-                    strcpy(buf_ptr, "pau");
+                    memcpy(buf_ptr, "pau", 3);
                     buf_ptr += 3;
                     phoneme_count++;
                 }
@@ -287,7 +287,7 @@ static OpenJTalkNativeProsodyResult* labels_to_phonemes_with_prosody(OpenJTalkNa
             if (phoneme_len >= 3 && strncmp(phoneme_start, "sil", 3) == 0) {
                 if (i == 0 || i == label_size - 1) {
                     if (buf_ptr != phoneme_buffer) *buf_ptr++ = ' ';
-                    strcpy(buf_ptr, "pau");
+                    memcpy(buf_ptr, "pau", 3);
                     buf_ptr += 3;
                     temp_a1[phoneme_count] = a1;
                     temp_a2[phoneme_count] = a2;
