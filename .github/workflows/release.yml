@@ -77,6 +77,20 @@ jobs:
         zip -r ../openjtalk-native-all.zip .
         cd ..
 
+    - name: Generate Checksums
+      run: |
+        cd artifacts
+        sha256sum \
+          openjtalk-native-windows-x64.zip \
+          openjtalk-native-linux-x86_64.tar.gz \
+          openjtalk-native-macos.tar.gz \
+          openjtalk-native-android.tar.gz \
+          openjtalk-native-ios-arm64.tar.gz \
+          openjtalk-native-all.zip \
+          2>/dev/null > SHA256SUMS.txt || true
+        echo "Generated checksums:"
+        cat SHA256SUMS.txt
+
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
@@ -87,6 +101,7 @@ jobs:
           artifacts/openjtalk-native-android.tar.gz
           artifacts/openjtalk-native-ios-arm64.tar.gz
           artifacts/openjtalk-native-all.zip
+          artifacts/SHA256SUMS.txt
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

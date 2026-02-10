@@ -44,6 +44,37 @@ cd "$EXTERNAL_DIR"
 OPENJTALK_VERSION="1.11"
 HTS_ENGINE_VERSION="1.10"
 
+# Expected SHA256 checksums (update these when upgrading versions)
+HTS_ENGINE_SHA256="e2132be5e550c1de2d36ab23711e2d9cc58e6efca5768afa5b76cf0b174e7b00"
+OPENJTALK_SHA256="1e2e564da5e64b289056eb57eee04078e72ea0e224d67cd5f512c6eb6e3a3e94"
+
+verify_checksum() {
+    local file="$1"
+    local expected="$2"
+    if [ -z "$expected" ]; then
+        echo "WARNING: No expected checksum provided, skipping verification for $file"
+        return 0
+    fi
+    local actual
+    if command -v sha256sum >/dev/null 2>&1; then
+        actual=$(sha256sum "$file" | awk '{print $1}')
+    elif command -v shasum >/dev/null 2>&1; then
+        actual=$(shasum -a 256 "$file" | awk '{print $1}')
+    else
+        echo "WARNING: No SHA256 tool found, skipping checksum verification"
+        return 0
+    fi
+    if [ "$actual" != "$expected" ]; then
+        echo "ERROR: Checksum mismatch for $file"
+        echo "  Expected: $expected"
+        echo "  Actual:   $actual"
+        rm -f "$file"
+        return 1
+    fi
+    echo "Checksum verified for $file"
+    return 0
+}
+
 echo "=== Fetching OpenJTalk Dependencies ==="
 
 # Download hts_engine_API
@@ -53,6 +84,9 @@ if [ ! -d "hts_engine_API-${HTS_ENGINE_VERSION}" ]; then
         "https://sourceforge.net/projects/hts-engine/files/hts_engine%20API/hts_engine_API-${HTS_ENGINE_VERSION}/hts_engine_API-${HTS_ENGINE_VERSION}.tar.gz/download" \
         "hts_engine_API.tar.gz" || \
         error_exit "Failed to download hts_engine_API after multiple attempts"
+
+    verify_checksum "hts_engine_API.tar.gz" "$HTS_ENGINE_SHA256" || \
+        error_exit "Checksum verification failed for hts_engine_API"
 
     echo "Extracting hts_engine_API..."
     tar xzf hts_engine_API.tar.gz || error_exit "Failed to extract hts_engine_API"
@@ -66,6 +100,9 @@ if [ ! -d "open_jtalk-${OPENJTALK_VERSION}" ]; then
         "https://sourceforge.net/projects/open-jtalk/files/Open%20JTalk/open_jtalk-${OPENJTALK_VERSION}/open_jtalk-${OPENJTALK_VERSION}.tar.gz/download" \
         "open_jtalk.tar.gz" || \
         error_exit "Failed to download OpenJTalk after multiple attempts"
+
+    verify_checksum "open_jtalk.tar.gz" "$OPENJTALK_SHA256" || \
+        error_exit "Checksum verification failed for OpenJTalk"
 
     echo "Extracting OpenJTalk..."
     tar xzf open_jtalk.tar.gz || error_exit "Failed to extract OpenJTalk"

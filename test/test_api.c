@@ -92,6 +92,53 @@ void test_option_handling(void) {
     /* get_option with NULL handle */
     const char* value = openjtalk_native_get_option(NULL, "key");
     ASSERT(value == NULL, "get_option with NULL handle returns NULL");
+
+    /* set_option with NULL key */
+    result = openjtalk_native_set_option((void*)1, NULL, "value");
+    ASSERT(result == OPENJTALK_NATIVE_ERROR_INVALID_INPUT, "set_option with NULL key returns error");
+
+    /* set_option with NULL value */
+    result = openjtalk_native_set_option((void*)1, "key", NULL);
+    ASSERT(result == OPENJTALK_NATIVE_ERROR_INVALID_INPUT, "set_option with NULL value returns error");
+
+    /* get_option with NULL key */
+    value = openjtalk_native_get_option((void*)1, NULL);
+    ASSERT(value == NULL, "get_option with NULL key returns NULL");
+}
+
+void test_error_string_coverage(void) {
+    printf("\n--- test_error_string_coverage ---\n");
+
+    /* Verify all defined error codes have correct strings */
+    ASSERT(strcmp(openjtalk_native_get_error_string(OPENJTALK_NATIVE_ERROR_INVALID_INPUT), "Invalid input") == 0,
+        "error string for INVALID_INPUT");
+    ASSERT(strcmp(openjtalk_native_get_error_string(OPENJTALK_NATIVE_ERROR_MEMORY_ALLOCATION), "Memory allocation failed") == 0,
+        "error string for MEMORY_ALLOCATION");
+    ASSERT(strcmp(openjtalk_native_get_error_string(OPENJTALK_NATIVE_ERROR_DICTIONARY_NOT_FOUND), "Dictionary not found") == 0,
+        "error string for DICTIONARY_NOT_FOUND");
+    ASSERT(strcmp(openjtalk_native_get_error_string(OPENJTALK_NATIVE_ERROR_INITIALIZATION_FAILED), "Initialization failed") == 0,
+        "error string for INITIALIZATION_FAILED");
+    ASSERT(strcmp(openjtalk_native_get_error_string(OPENJTALK_NATIVE_ERROR_PHONEMIZATION_FAILED), "Phonemization failed") == 0,
+        "error string for PHONEMIZATION_FAILED");
+    ASSERT(strcmp(openjtalk_native_get_error_string(OPENJTALK_NATIVE_ERROR_PROCESSING), "Processing error") == 0,
+        "error string for PROCESSING");
+    ASSERT(strcmp(openjtalk_native_get_error_string(OPENJTALK_NATIVE_ERROR_INVALID_OPTION), "Invalid option") == 0,
+        "error string for INVALID_OPTION");
+    ASSERT(strcmp(openjtalk_native_get_error_string(OPENJTALK_NATIVE_ERROR_INVALID_DICTIONARY), "Invalid dictionary") == 0,
+        "error string for INVALID_DICTIONARY");
+    ASSERT(strcmp(openjtalk_native_get_error_string(OPENJTALK_NATIVE_ERROR_INVALID_UTF8), "Invalid UTF-8") == 0,
+        "error string for INVALID_UTF8");
+}
+
+void test_version_format(void) {
+    printf("\n--- test_version_format ---\n");
+
+    const char* version = openjtalk_native_get_version();
+    /* Version should be in semver format "X.Y.Z" */
+    int major = -1, minor = -1, patch = -1;
+    int parsed = sscanf(version, "%d.%d.%d", &major, &minor, &patch);
+    ASSERT(parsed == 3, "version is in X.Y.Z format");
+    ASSERT(major >= 0 && minor >= 0 && patch >= 0, "version components are non-negative");
 }
 
 void test_legacy_api(void) {
@@ -122,8 +169,10 @@ int main(void) {
     printf("=== openjtalk_native API Tests ===\n");
 
     test_version();
+    test_version_format();
     test_null_handling();
     test_error_codes();
+    test_error_string_coverage();
     test_invalid_dict();
     test_option_handling();
     test_legacy_api();

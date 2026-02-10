@@ -14,6 +14,33 @@ Set-Location $ExternalDir
 $OpenJTalkVersion = "1.11"
 $HTSEngineVersion = "1.10"
 
+# Expected SHA256 checksums (update these when upgrading versions)
+$HTSEngineSHA256 = "e2132be5e550c1de2d36ab23711e2d9cc58e6efca5768afa5b76cf0b174e7b00"
+$OpenJTalkSHA256 = "1e2e564da5e64b289056eb57eee04078e72ea0e224d67cd5f512c6eb6e3a3e94"
+
+function Verify-Checksum {
+    param(
+        [string]$FilePath,
+        [string]$ExpectedHash
+    )
+
+    if ([string]::IsNullOrEmpty($ExpectedHash)) {
+        Write-Host "WARNING: No expected checksum provided, skipping verification for $FilePath"
+        return $true
+    }
+
+    $actualHash = (Get-FileHash -Path $FilePath -Algorithm SHA256).Hash.ToLower()
+    if ($actualHash -ne $ExpectedHash) {
+        Write-Host "ERROR: Checksum mismatch for $FilePath"
+        Write-Host "  Expected: $ExpectedHash"
+        Write-Host "  Actual:   $actualHash"
+        Remove-Item $FilePath -Force
+        return $false
+    }
+    Write-Host "Checksum verified for $FilePath"
+    return $true
+}
+
 function Download-WithRetry {
     param(
         [string]$Url,
@@ -70,6 +97,11 @@ if (-not (Test-Path $HTSDir)) {
         exit 1
     }
 
+    if (-not (Verify-Checksum "hts_engine_API.tar.gz" $HTSEngineSHA256)) {
+        Write-Error "Checksum verification failed for hts_engine_API"
+        exit 1
+    }
+
     Write-Host "Extracting hts_engine_API..."
     Extract-TarGz "hts_engine_API.tar.gz"
     Remove-Item "hts_engine_API.tar.gz"
@@ -85,6 +117,11 @@ if (-not (Test-Path $OJTDir)) {
 
     if (-not $result) {
         Write-Error "Failed to download OpenJTalk after multiple attempts"
+        exit 1
+    }
+
+    if (-not (Verify-Checksum "open_jtalk.tar.gz" $OpenJTalkSHA256)) {
+        Write-Error "Checksum verification failed for OpenJTalk"
         exit 1
     }
 

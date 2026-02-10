@@ -5,6 +5,31 @@
  *
  * This library provides a C API for converting Japanese text to phonemes
  * using the OpenJTalk engine with MeCab morphological analysis.
+ *
+ * Thread safety:
+ *   - Each handle (void*) returned by openjtalk_native_create() is independent.
+ *   - Different handles can be used concurrently from different threads.
+ *   - A single handle must NOT be used from multiple threads simultaneously.
+ *   - openjtalk_native_get_version() and openjtalk_native_get_error_string()
+ *     are safe to call from any thread.
+ *
+ * Memory ownership:
+ *   - openjtalk_native_phonemize() returns a result that the caller must free
+ *     via openjtalk_native_free_result().
+ *   - openjtalk_native_phonemize_with_prosody() returns a result that the caller
+ *     must free via openjtalk_native_free_prosody_result().
+ *   - openjtalk_native_analyze() / openjtalk_native_analyze_utf8() return a
+ *     string that the caller must free via openjtalk_native_free_string().
+ *   - openjtalk_native_get_option() returns a pointer to an internal buffer
+ *     owned by the handle; it is overwritten on the next get_option call
+ *     on the same handle. Do not free this pointer.
+ *   - openjtalk_native_get_version() and openjtalk_native_get_error_string()
+ *     return pointers to static strings. Do not free these pointers.
+ *
+ * Input limits:
+ *   - Input text must not exceed 4096 bytes (UTF-8). Longer inputs are
+ *     rejected with OPENJTALK_NATIVE_ERROR_INVALID_INPUT.
+ *   - Empty strings are rejected with OPENJTALK_NATIVE_ERROR_INVALID_INPUT.
  */
 
 #ifndef OPENJTALK_NATIVE_H
@@ -142,17 +167,28 @@ OPENJTALK_NATIVE_API const char* openjtalk_native_get_error_string(int error_cod
 /**
  * @brief Set an option on the OpenJTalk instance
  * @param handle Handle returned by openjtalk_native_create()
- * @param key Option key (e.g., "speech_rate", "pitch", "volume")
+ * @param key Option key (see below)
  * @param value Option value as string
  * @return OPENJTALK_NATIVE_SUCCESS on success, error code on failure
+ *
+ * Available keys:
+ *   - "speech_rate": Speech rate multiplier (range: 0.0 < rate <= 10.0, default: 1.0)
+ *   - "pitch":       Pitch shift in semitones (range: -20.0 <= pitch <= 20.0, default: 0.0)
+ *   - "volume":      Volume multiplier (range: 0.0 <= volume <= 2.0, default: 1.0)
+ *
+ * Returns OPENJTALK_NATIVE_ERROR_INVALID_INPUT for unknown keys or out-of-range values.
  */
 OPENJTALK_NATIVE_API int openjtalk_native_set_option(void* handle, const char* key, const char* value);
 
 /**
  * @brief Get an option value from the OpenJTalk instance
  * @param handle Handle returned by openjtalk_native_create()
- * @param key Option key
- * @return Option value as string, or NULL if not found
+ * @param key Option key (same keys as openjtalk_native_set_option)
+ * @return Option value as string, or NULL if key is not found
+ *
+ * @note The returned pointer references an internal buffer owned by the handle.
+ *       It is valid until the next call to openjtalk_native_get_option() on the
+ *       same handle. Do not free this pointer.
  */
 OPENJTALK_NATIVE_API const char* openjtalk_native_get_option(void* handle, const char* key);
 

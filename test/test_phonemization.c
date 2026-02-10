@@ -139,6 +139,92 @@ int main(void) {
     /* Options tests */
     test_options(handle);
 
+    /* Edge case: empty string should return NULL */
+    printf("\n--- test_empty_string ---\n");
+    {
+        OpenJTalkNativePhonemeResult* r = openjtalk_native_phonemize(handle, "");
+        ASSERT(r == NULL, "phonemize empty string returns NULL");
+        int err = openjtalk_native_get_last_error(handle);
+        ASSERT(err == OPENJTALK_NATIVE_ERROR_INVALID_INPUT, "empty string sets INVALID_INPUT error");
+    }
+
+    /* Edge case: empty string with prosody should return NULL */
+    printf("\n--- test_empty_string_prosody ---\n");
+    {
+        OpenJTalkNativeProsodyResult* r = openjtalk_native_phonemize_with_prosody(handle, "");
+        ASSERT(r == NULL, "phonemize_with_prosody empty string returns NULL");
+    }
+
+    /* Edge case: whitespace-only input */
+    printf("\n--- test_whitespace_only ---\n");
+    {
+        OpenJTalkNativePhonemeResult* r = openjtalk_native_phonemize(handle, "   ");
+        /* MeCab may or may not produce output for whitespace; just ensure no crash */
+        ASSERT(1, "whitespace-only input does not crash");
+        if (r) openjtalk_native_free_result(r);
+    }
+
+    /* Edge case: ASCII-only input */
+    printf("\n--- test_ascii_input ---\n");
+    {
+        OpenJTalkNativePhonemeResult* r = openjtalk_native_phonemize(handle, "hello");
+        /* OpenJTalk processes ASCII differently; ensure no crash */
+        ASSERT(1, "ASCII-only input does not crash");
+        if (r) openjtalk_native_free_result(r);
+    }
+
+    /* Edge case: mixed Japanese and numbers */
+    printf("\n--- test_mixed_input ---\n");
+    {
+        OpenJTalkNativePhonemeResult* r = openjtalk_native_phonemize(handle, "100円です");
+        ASSERT(r != NULL, "mixed input returns result");
+        if (r) {
+            ASSERT(r->phonemes != NULL, "mixed input has phonemes");
+            ASSERT(r->phoneme_count > 0, "mixed input has positive phoneme count");
+            printf("  Phonemes: %s\n", r->phonemes);
+            openjtalk_native_free_result(r);
+        }
+    }
+
+    /* Concrete option value verification */
+    printf("\n--- test_option_value_readback ---\n");
+    {
+        int ret = openjtalk_native_set_option(handle, "speech_rate", "2.00");
+        ASSERT(ret == OPENJTALK_NATIVE_SUCCESS, "set speech_rate=2.00");
+        const char* val = openjtalk_native_get_option(handle, "speech_rate");
+        ASSERT(val != NULL && strcmp(val, "2.00") == 0, "speech_rate readback is '2.00'");
+
+        ret = openjtalk_native_set_option(handle, "pitch", "-5.00");
+        ASSERT(ret == OPENJTALK_NATIVE_SUCCESS, "set pitch=-5.00");
+        val = openjtalk_native_get_option(handle, "pitch");
+        ASSERT(val != NULL && strcmp(val, "-5.00") == 0, "pitch readback is '-5.00'");
+
+        ret = openjtalk_native_set_option(handle, "volume", "0.50");
+        ASSERT(ret == OPENJTALK_NATIVE_SUCCESS, "set volume=0.50");
+        val = openjtalk_native_get_option(handle, "volume");
+        ASSERT(val != NULL && strcmp(val, "0.50") == 0, "volume readback is '0.50'");
+
+        /* Out-of-range values should be rejected */
+        ret = openjtalk_native_set_option(handle, "speech_rate", "0.0");
+        ASSERT(ret != OPENJTALK_NATIVE_SUCCESS, "speech_rate=0.0 rejected");
+
+        ret = openjtalk_native_set_option(handle, "speech_rate", "11.0");
+        ASSERT(ret != OPENJTALK_NATIVE_SUCCESS, "speech_rate=11.0 rejected");
+
+        ret = openjtalk_native_set_option(handle, "pitch", "-25.0");
+        ASSERT(ret != OPENJTALK_NATIVE_SUCCESS, "pitch=-25.0 rejected");
+
+        ret = openjtalk_native_set_option(handle, "volume", "-1.0");
+        ASSERT(ret != OPENJTALK_NATIVE_SUCCESS, "volume=-1.0 rejected");
+
+        ret = openjtalk_native_set_option(handle, "volume", "3.0");
+        ASSERT(ret != OPENJTALK_NATIVE_SUCCESS, "volume=3.0 rejected");
+
+        /* Unknown option key */
+        val = openjtalk_native_get_option(handle, "nonexistent_key");
+        ASSERT(val == NULL, "get_option for unknown key returns NULL");
+    }
+
     openjtalk_native_destroy(handle);
 
     printf("\n=== Results: %d/%d passed ===\n", tests_passed, tests_run);

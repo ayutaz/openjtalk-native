@@ -23,6 +23,10 @@
 
 #define VERSION "1.0.0"
 
+/* Maximum input text length (in bytes) to prevent buffer overflows.
+   text2mecab can expand input, so we cap well below the 8192 buffer. */
+#define MAX_INPUT_TEXT_LENGTH 4096
+
 /* Debug logging */
 #ifdef ENABLE_DEBUG_LOG
 #ifdef ANDROID
@@ -46,6 +50,7 @@ typedef struct {
     double speech_rate;
     double pitch;
     double volume;
+    char option_buffer[32]; /* Per-instance buffer for get_option return values */
 } OpenJTalkNativeContext;
 
 const char* openjtalk_native_get_version(void) {
@@ -350,6 +355,19 @@ OpenJTalkNativePhonemeResult* openjtalk_native_phonemize(void* handle, const cha
         return NULL;
     }
 
+    /* Reject empty strings */
+    size_t text_len = strlen(text);
+    if (text_len == 0) {
+        ctx->last_error = OPENJTALK_NATIVE_ERROR_INVALID_INPUT;
+        return NULL;
+    }
+
+    /* Validate input length to prevent buffer overflow in text2mecab */
+    if (text_len > MAX_INPUT_TEXT_LENGTH) {
+        ctx->last_error = OPENJTALK_NATIVE_ERROR_INVALID_INPUT;
+        return NULL;
+    }
+
     DEBUG_LOG("Phonemizing text: %s", text);
 
     NJD_clear(ctx->njd);
@@ -393,6 +411,19 @@ OpenJTalkNativeProsodyResult* openjtalk_native_phonemize_with_prosody(void* hand
 
     if (!ctx->initialized) {
         ctx->last_error = OPENJTALK_NATIVE_ERROR_INITIALIZATION_FAILED;
+        return NULL;
+    }
+
+    /* Reject empty strings */
+    size_t text_len = strlen(text);
+    if (text_len == 0) {
+        ctx->last_error = OPENJTALK_NATIVE_ERROR_INVALID_INPUT;
+        return NULL;
+    }
+
+    /* Validate input length to prevent buffer overflow in text2mecab */
+    if (text_len > MAX_INPUT_TEXT_LENGTH) {
+        ctx->last_error = OPENJTALK_NATIVE_ERROR_INVALID_INPUT;
         return NULL;
     }
 
@@ -491,19 +522,18 @@ const char* openjtalk_native_get_option(void* handle, const char* key) {
     if (!handle || !key) return NULL;
 
     OpenJTalkNativeContext* ctx = (OpenJTalkNativeContext*)handle;
-    static char buffer[32];
 
     if (strcmp(key, "speech_rate") == 0) {
-        snprintf(buffer, sizeof(buffer), "%.2f", ctx->speech_rate);
-        return buffer;
+        snprintf(ctx->option_buffer, sizeof(ctx->option_buffer), "%.2f", ctx->speech_rate);
+        return ctx->option_buffer;
     }
     else if (strcmp(key, "pitch") == 0) {
-        snprintf(buffer, sizeof(buffer), "%.2f", ctx->pitch);
-        return buffer;
+        snprintf(ctx->option_buffer, sizeof(ctx->option_buffer), "%.2f", ctx->pitch);
+        return ctx->option_buffer;
     }
     else if (strcmp(key, "volume") == 0) {
-        snprintf(buffer, sizeof(buffer), "%.2f", ctx->volume);
-        return buffer;
+        snprintf(ctx->option_buffer, sizeof(ctx->option_buffer), "%.2f", ctx->volume);
+        return ctx->option_buffer;
     }
 
     return NULL;
