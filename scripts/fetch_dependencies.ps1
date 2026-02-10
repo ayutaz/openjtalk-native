@@ -15,7 +15,7 @@ $OpenJTalkVersion = "1.11"
 $HTSEngineVersion = "1.10"
 
 # Expected SHA256 checksums (update these when upgrading versions)
-$HTSEngineSHA256 = "e2132be5e550c1de2d36ab23711e2d9cc58e6efca5768afa5b76cf0b174e7b00"
+$HTSEngineSHA256 = "e2132be5860d8fb4a460be766454cfd7c3e21cf67b509c48e1804feab14968f7"
 $OpenJTalkSHA256 = "1e2e564da5e64b289056eb57eee04078e72ea0e224d67cd5f512c6eb6e3a3e94"
 
 function Verify-Checksum {
