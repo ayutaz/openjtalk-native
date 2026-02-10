@@ -197,9 +197,8 @@ elseif(APPLE)
         m
     )
 else()
-    target_link_libraries(openjtalk_native ${OPENJTALK_LIBS} m)
     find_package(Threads REQUIRED)
-    target_link_libraries(openjtalk_native Threads::Threads)
+    target_link_libraries(openjtalk_native ${OPENJTALK_LIBS} stdc++ m Threads::Threads)
 endif()
 
 # Platform-specific output properties
