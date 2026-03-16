@@ -98,7 +98,7 @@ verify_checksum() {
 verify_gzip_format() {
     local file="$1"
     local magic
-    magic=$(xxd -l 2 -p "$file" 2>/dev/null)
+    magic=$(od -A n -N 2 -t x1 "$file" 2>/dev/null | tr -d ' \n')
     if [ "$magic" != "1f8b" ]; then
         echo "ERROR: $file is not a valid gzip file (magic: $magic)"
         rm -f "$file"
