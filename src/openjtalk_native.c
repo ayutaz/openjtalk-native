@@ -23,9 +23,13 @@
 
 #define VERSION "1.0.0"
 
-/* Maximum input text length (in bytes) to prevent buffer overflows.
-   text2mecab can expand input, so we cap well below the 8192 buffer. */
+/* Maximum input text length (in bytes). */
 #define MAX_INPUT_TEXT_LENGTH 4096
+
+/* text2mecab() converts each half-width character to its full-width form,
+   so a 1-byte ASCII character can become 3 bytes of UTF-8. The output
+   buffer must therefore hold up to 3 bytes per input byte plus the NUL. */
+#define TEXT2MECAB_MAX_EXPANSION 3
 
 /* Debug logging */
 #ifdef ENABLE_DEBUG_LOG
@@ -159,6 +163,32 @@ void openjtalk_native_destroy(void* handle) {
     free(ctx);
 }
 
+/* Upper bound of the phoneme string length built from the labels
+   (each phoneme is at least as long as "pau" in the worst case, plus a
+   separating space), including the terminating NUL. */
+static size_t phoneme_buffer_capacity(char** label_feature, int label_size) {
+    size_t capacity = 1;
+    for (int i = 0; i < label_size; i++) {
+        if (!label_feature[i]) continue;
+        const char* phoneme_start = strchr(label_feature[i], '-');
+        const char* phoneme_end = strchr(label_feature[i], '+');
+        if (phoneme_start && phoneme_end && phoneme_start < phoneme_end) {
+            size_t phoneme_len = (size_t)(phoneme_end - phoneme_start - 1);
+            capacity += (phoneme_len > 3 ? phoneme_len : 3) + 1;
+        }
+    }
+    return capacity;
+}
+
+/* Run text2mecab() into a heap buffer that is large enough for the
+   worst-case expansion. Returns NULL on allocation failure. */
+static char* convert_text2mecab(const char* text, size_t text_len) {
+    char* mecab_text = (char*)malloc(text_len * TEXT2MECAB_MAX_EXPANSION + 1);
+    if (!mecab_text) return NULL;
+    text2mecab(mecab_text, text);
+    return mecab_text;
+}
+
 /* Convert JPCommon labels to phonemes */
 static OpenJTalkNativePhonemeResult* labels_to_phonemes(OpenJTalkNativeContext* ctx, JPCommon* jpcommon) {
     OpenJTalkNativePhonemeResult* result = (OpenJTalkNativePhonemeResult*)calloc(1, sizeof(OpenJTalkNativePhonemeResult));
@@ -172,7 +202,11 @@ static OpenJTalkNativePhonemeResult* labels_to_phonemes(OpenJTalkNativeContext* 
         return NULL;
     }
 
-    char phoneme_buffer[8192] = {0};
+    char* phoneme_buffer = (char*)malloc(phoneme_buffer_capacity(label_feature, label_size));
+    if (!phoneme_buffer) {
+        free(result);
+        return NULL;
+    }
     char* buf_ptr = phoneme_buffer;
     int phoneme_count = 0;
 
@@ -211,7 +245,7 @@ static OpenJTalkNativePhonemeResult* labels_to_phonemes(OpenJTalkNativeContext* 
     DEBUG_LOG("Extracted phonemes: %s (count: %d)", phoneme_buffer, phoneme_count);
 
     result->phoneme_count = phoneme_count;
-    result->phonemes = strdup(phoneme_buffer);
+    result->phonemes = phoneme_buffer;
     result->phoneme_ids = (int*)calloc(phoneme_count, sizeof(int));
     result->durations = (float*)calloc(phoneme_count, sizeof(float));
 
@@ -254,7 +288,14 @@ static OpenJTalkNativeProsodyResult* labels_to_phonemes_with_prosody(OpenJTalkNa
         return NULL;
     }
 
-    char phoneme_buffer[8192] = {0};
+    char* phoneme_buffer = (char*)malloc(phoneme_buffer_capacity(label_feature, label_size));
+    if (!phoneme_buffer) {
+        free(temp_a1);
+        free(temp_a2);
+        free(temp_a3);
+        free(result);
+        return NULL;
+    }
     char* buf_ptr = phoneme_buffer;
     int phoneme_count = 0;
 
@@ -309,7 +350,7 @@ static OpenJTalkNativeProsodyResult* labels_to_phonemes_with_prosody(OpenJTalkNa
     *buf_ptr = '\0';
 
     result->phoneme_count = phoneme_count;
-    result->phonemes = strdup(phoneme_buffer);
+    result->phonemes = phoneme_buffer;
     result->prosody_a1 = (int*)calloc(phoneme_count, sizeof(int));
     result->prosody_a2 = (int*)calloc(phoneme_count, sizeof(int));
     result->prosody_a3 = (int*)calloc(phoneme_count, sizeof(int));
@@ -362,7 +403,7 @@ OpenJTalkNativePhonemeResult* openjtalk_native_phonemize(void* handle, const cha
         return NULL;
     }
 
-    /* Validate input length to prevent buffer overflow in text2mecab */
+    /* Validate input length */
     if (text_len > MAX_INPUT_TEXT_LENGTH) {
         ctx->last_error = OPENJTALK_NATIVE_ERROR_INVALID_INPUT;
         return NULL;
@@ -373,10 +414,15 @@ OpenJTalkNativePhonemeResult* openjtalk_native_phonemize(void* handle, const cha
     NJD_clear(ctx->njd);
     JPCommon_clear(ctx->jpcommon);
 
-    char mecab_text[8192];
-    text2mecab(mecab_text, text);
+    char* mecab_text = convert_text2mecab(text, text_len);
+    if (!mecab_text) {
+        ctx->last_error = OPENJTALK_NATIVE_ERROR_MEMORY_ALLOCATION;
+        return NULL;
+    }
 
-    if (Mecab_analysis(ctx->mecab, mecab_text) != TRUE) {
+    BOOL analyzed = Mecab_analysis(ctx->mecab, mecab_text);
+    free(mecab_text);
+    if (analyzed != TRUE) {
         ctx->last_error = OPENJTALK_NATIVE_ERROR_PHONEMIZATION_FAILED;
         return NULL;
     }
@@ -421,7 +467,7 @@ OpenJTalkNativeProsodyResult* openjtalk_native_phonemize_with_prosody(void* hand
         return NULL;
     }
 
-    /* Validate input length to prevent buffer overflow in text2mecab */
+    /* Validate input length */
     if (text_len > MAX_INPUT_TEXT_LENGTH) {
         ctx->last_error = OPENJTALK_NATIVE_ERROR_INVALID_INPUT;
         return NULL;
@@ -430,10 +476,15 @@ OpenJTalkNativeProsodyResult* openjtalk_native_phonemize_with_prosody(void* hand
     NJD_clear(ctx->njd);
     JPCommon_clear(ctx->jpcommon);
 
-    char mecab_text[8192];
-    text2mecab(mecab_text, text);
+    char* mecab_text = convert_text2mecab(text, text_len);
+    if (!mecab_text) {
+        ctx->last_error = OPENJTALK_NATIVE_ERROR_MEMORY_ALLOCATION;
+        return NULL;
+    }
 
-    if (Mecab_analysis(ctx->mecab, mecab_text) != TRUE) {
+    BOOL analyzed = Mecab_analysis(ctx->mecab, mecab_text);
+    free(mecab_text);
+    if (analyzed != TRUE) {
         ctx->last_error = OPENJTALK_NATIVE_ERROR_PHONEMIZATION_FAILED;
         return NULL;
     }

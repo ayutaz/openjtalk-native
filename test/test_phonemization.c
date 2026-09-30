@@ -186,6 +186,50 @@ int main(void) {
         }
     }
 
+    /* Edge case: maximum-length ASCII input. text2mecab() expands each
+       ASCII byte to a 3-byte full-width character, and every letter becomes
+       several phonemes, so this used to overflow fixed-size stack buffers. */
+    printf("\n--- test_max_length_ascii_input ---\n");
+    {
+        const size_t len = 4096;
+        char* text = (char*)malloc(len + 1);
+        ASSERT(text != NULL, "allocate max-length input");
+        if (text) {
+            memset(text, 'a', len);
+            text[len] = '\0';
+
+            OpenJTalkNativePhonemeResult* r = openjtalk_native_phonemize(handle, text);
+            ASSERT(r != NULL, "max-length ASCII input returns result");
+            if (r) {
+                ASSERT(r->phonemes != NULL && strlen(r->phonemes) > 8192,
+                       "max-length ASCII input produces a phoneme string longer than 8192 bytes");
+                openjtalk_native_free_result(r);
+            }
+
+            OpenJTalkNativeProsodyResult* p = openjtalk_native_phonemize_with_prosody(handle, text);
+            ASSERT(p != NULL, "max-length ASCII input returns prosody result");
+            if (p) {
+                ASSERT(p->phonemes != NULL && strlen(p->phonemes) > 8192,
+                       "max-length ASCII prosody phoneme string longer than 8192 bytes");
+                openjtalk_native_free_prosody_result(p);
+            }
+
+            /* One byte over the limit must be rejected */
+            char* over = (char*)malloc(len + 2);
+            if (over) {
+                memset(over, 'a', len + 1);
+                over[len + 1] = '\0';
+                r = openjtalk_native_phonemize(handle, over);
+                ASSERT(r == NULL, "input longer than 4096 bytes is rejected");
+                ASSERT(openjtalk_native_get_last_error(handle) == OPENJTALK_NATIVE_ERROR_INVALID_INPUT,
+                       "input longer than 4096 bytes sets INVALID_INPUT error");
+                openjtalk_native_free_result(r);
+                free(over);
+            }
+            free(text);
+        }
+    }
+
     /* Concrete option value verification */
     printf("\n--- test_option_value_readback ---\n");
     {
