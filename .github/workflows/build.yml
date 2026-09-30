@@ -44,7 +44,7 @@ jobs:
       run: cmake --build build -j$(nproc)
 
     - name: Run Tests
-      run: cd build && ctest --output-on-failure
+      run: cd build && ctest --output-on-failure --no-tests=error
 
     - name: Verify Exports
       run: nm -D build/lib/libopenjtalk_native.so | grep openjtalk_native_ | head -20
@@ -98,7 +98,7 @@ jobs:
         cmake --build build -j$(sysctl -n hw.ncpu)
 
     - name: Run Tests
-      run: cd build && ctest --output-on-failure
+      run: cd build && ctest --output-on-failure --no-tests=error
 
     - name: Prepare Artifacts
       run: |

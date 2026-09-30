@@ -53,6 +53,8 @@ cmake --build build -j$(nproc)
 cd build && ctest --output-on-failure
 ```
 
+`test_phonemization` は辞書 `external/open_jtalk_dic_utf_8-1.11` を使用します（ctest 実行時はこのパスが `OPENJTALK_DICT` に設定されます）。辞書が無い場合は SKIP 扱いで成功終了するため、音素化まで検証するには事前に辞書を `external/` に展開してください。
+
 ### Windows
 
 ```powershell
@@ -258,6 +260,8 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
 cmake --build build -j$(nproc)
 cd build && ctest --output-on-failure
 ```
+
+`test_phonemization` uses the dictionary at `external/open_jtalk_dic_utf_8-1.11` (ctest sets `OPENJTALK_DICT` to this path). If the dictionary is missing the test is reported as skipped and exits successfully, so extract the dictionary into `external/` beforehand to actually verify phonemization.
 
 ### Windows
 

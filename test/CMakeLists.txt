@@ -1,5 +1,3 @@
-enable_testing()
-
 # Test: API lifecycle and error handling
 add_executable(test_api test_api.c)
 target_include_directories(test_api PRIVATE ${CMAKE_SOURCE_DIR}/include)
