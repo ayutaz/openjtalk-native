@@ -258,7 +258,10 @@ else()
 endif()
 
 # Tests
+# enable_testing() must be called in the top-level CMakeLists.txt so that
+# `ctest` run from the build root can discover the tests in test/.
 if(BUILD_TESTS AND NOT ANDROID AND NOT IOS)
+    enable_testing()
     add_subdirectory(test)
 endif()
 
